@@ -25,7 +25,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda x: [s.strip() for s in x.split(',')])
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -41,8 +41,9 @@ INSTALLED_APPS = [
     # installed
     'rest_framework',
     'django_filters',
-    'corsheaders',
-    'core',
+    "corsheaders",
+    "rest_framework_simplejwt",
+    'drf_yasg',
 
     # apps
     'accounts',
@@ -51,7 +52,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  
-    'django.middleware.security.SecurityMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -135,18 +135,17 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Для dev True, в prod укажи origins
+CORS_ALLOW_ALL_ORIGINS = DEBUG  
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.AllowAny",
+    ),
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ),
 }
