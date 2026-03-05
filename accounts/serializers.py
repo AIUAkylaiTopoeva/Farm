@@ -33,8 +33,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return user
 
+class FarmerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmerProfile
+        fields = ("farm_name", "address", "lat", "lon")
 
 class MeSerializer(serializers.ModelSerializer):
+    farmer_profile = FarmerProfileSerializer(read_only=True)
     class Meta:
         model = User
-        fields = ("id", "email", "role")
+        fields = ("id", "email", "role", "farmer_profile")
+        

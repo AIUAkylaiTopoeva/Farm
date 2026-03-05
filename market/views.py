@@ -5,7 +5,7 @@ from accounts.permissions import IsFarmer, IsAdminRole
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
 from .permissions import IsOwnerOrAdminRole
-
+from .filters import ProductFilter
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -22,9 +22,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.select_related("category", "owner").all()
     serializer_class = ProductSerializer
 
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["is_active", "category"]
-    search_fields = ["title", "description"]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = ProductFilter
+
     ordering_fields = ["price", "created_at"]
     ordering = ["-created_at"]
 
