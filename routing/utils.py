@@ -1,75 +1,102 @@
+"""
+Утилиты для оптимизации маршрута между фермами.
+Точка вида: {"farmer_id": int, "lat": float, "lon": float, ...}
+"""
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Расстояние между двумя GPS-точками по формуле Haversine (км)."""
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return R * 2 * math.asin(math.sqrt(a))
 
 
-def haversine_km(a: Dict, b: Dict) -> float:
+
+def group_products_by_farmer(raw_points: List[Dict]) -> Dict[int, List[int]]:
     """
-    Расстояние между двумя точками на сфере (км).
-    a/b: {"lat": float, "lon": float}
+    Принимает список {"farmer_id": int, "product_id": int}.
+    Возвращает {farmer_id: [product_id, ...]} сгруппированные по ферме.
+    Порядок фермеров — по первому появлению в списке.
     """
-    r = 6371.0
-    lat1 = math.radians(float(a["lat"]))
-    lon1 = math.radians(float(a["lon"]))
-    lat2 = math.radians(float(b["lat"]))
-    lon2 = math.radians(float(b["lon"]))
-
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-
-    h = (math.sin(dlat / 2) ** 2) + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2) ** 2)
-    return 2 * r * math.asin(math.sqrt(h))
+    result: Dict[int, List[int]] = {}
+    for item in raw_points:
+        fid = item["farmer_id"]
+        pid = item["product_id"]
+        if fid not in result:
+            result[fid] = []
+        if pid not in result[fid]:
+            result[fid].append(pid)
+    return result
 
 
-def route_length_km(points: List[Dict], start: Optional[Dict] = None) -> float:
+def route_length_km(
+    points: List[Dict],
+    start: Optional[Dict] = None,
+) -> float:
     """
-    Длина маршрута: start -> points[0] -> ... -> points[n-1]
-    (без возврата в начало).
+    Считает суммарную длину маршрута через все точки (км).
+    Если передан start — добавляет расстояние от старта до первой точки.
     """
     if not points:
         return 0.0
 
-    dist = 0.0
-    prev = start if start else points[0]
-    idx0 = 0 if start else 1  # если start отсутствует, начинаем с points[0] как "старт" и считаем со 2-й точки
+    total = 0.0
 
-    for i in range(idx0, len(points)):
-        dist += haversine_km(prev, points[i])
-        prev = points[i]
-    return float(dist)
+    if start:
+        total += haversine_km(
+            start["lat"], start["lon"],
+            points[0]["lat"], points[0]["lon"],
+        )
+
+    for i in range(len(points) - 1):
+        total += haversine_km(
+            points[i]["lat"], points[i]["lon"],
+            points[i + 1]["lat"], points[i + 1]["lon"],
+        )
+
+    return total
 
 
-def nearest_neighbor(points: List[Dict], start: Optional[Dict] = None) -> List[Dict]:
+
+def nearest_neighbor(
+    points: List[Dict],
+    start: Optional[Dict] = None,
+) -> List[Dict]:
     """
-    Эвристика: каждый раз идём в ближайшую следующую точку.
-    Возвращает новый список (не меняет исходный).
+    Жадный алгоритм ближайшего соседа (Nearest Neighbor).
+    Каждый раз выбирает ближайшую ещё не посещённую точку.
+    Возвращает переупорядоченный список точек.
     """
-    if not points:
-        return []
+    if len(points) <= 1:
+        return list(points)
 
-    unvisited = points[:]
-    route: List[Dict] = []
+    unvisited = list(points)
+    route = []
 
-    current = start if start else unvisited.pop(0)
-    if not start:
-        # если start не задан, первая точка считается посещенной и в маршруте первой
-        route.append(current)
+    if start:
+        current_lat = start["lat"]
+        current_lon = start["lon"]
+    else:
+        first = unvisited.pop(0)
+        route.append(first)
+        current_lat = first["lat"]
+        current_lon = first["lon"]
 
     while unvisited:
-        nxt = min(unvisited, key=lambda p: haversine_km(current, p))
-        route.append(nxt)
-        unvisited.remove(nxt)
-        current = nxt
+        nearest = min(
+            unvisited,
+            key=lambda p: haversine_km(current_lat, current_lon, p["lat"], p["lon"]),
+        )
+        route.append(nearest)
+        unvisited.remove(nearest)
+        current_lat = nearest["lat"]
+        current_lon = nearest["lon"]
 
     return route
-
-
-def group_products_by_farmer(points: List[Dict]) -> Dict[int, List[int]]:
-    """
-    points: элементы с farmer_id и product_id
-    -> farmer_id: [product_ids]
-    """
-    res: Dict[int, List[int]] = {}
-    for p in points:
-        fid = int(p["farmer_id"])
-        res.setdefault(fid, []).append(int(p["product_id"]))
-    return res

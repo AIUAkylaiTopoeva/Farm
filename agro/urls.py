@@ -29,6 +29,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=[permissions.AllowAny],
+    authentication_classes=[],
 )
 
 urlpatterns = [
@@ -38,5 +39,5 @@ urlpatterns = [
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
     path("api/", include("market.urls")),
     path("api/routing/", include("routing.urls")),
-    path('auth/', include('dj_rest_auth.urls')),
+    # path('auth/', include('dj_rest_auth.urls')),
 ]

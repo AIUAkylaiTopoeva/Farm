@@ -7,17 +7,36 @@ class LatLonSerializer(serializers.Serializer):
 
 
 class OptimizeRouteRequestSerializer(serializers.Serializer):
-    # пользователь выбирает товары, мы сами превращаем их в фермеров/точки
     product_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         allow_empty=False,
     )
-
-    # стартовая точка (например, пользователь/город). Можно не передавать.
     start = LatLonSerializer(required=False)
 
     def validate_product_ids(self, value):
-        # убираем дубли, сохраняя порядок
+        seen = set()
+        unique = []
+        for x in value:
+            if x not in seen:
+                unique.append(x)
+                seen.add(x)
+        return unique
+
+
+class CompareRouteRequestSerializer(serializers.Serializer):
+    """Для /api/routing/compare/ — добавляет road_quality."""
+    product_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+    )
+    start = LatLonSerializer(required=False)
+    road_quality = serializers.ChoiceField(
+        choices=["good", "medium", "bad"],
+        default="medium",
+        required=False,
+    )
+
+    def validate_product_ids(self, value):
         seen = set()
         unique = []
         for x in value:

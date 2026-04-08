@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
-from agro.settings import AUTH_USER_MODEL
 
 
 class Category(models.Model):
@@ -41,6 +40,7 @@ class Product(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    weight_kg = models.FloatField(default=1.0, help_text="Вес единицы товара (кг)")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
