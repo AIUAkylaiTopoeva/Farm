@@ -1,11 +1,10 @@
 from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
-
-from accounts.permissions import IsFarmer, IsAdminRole
+from accounts.permissions import IsFarmer, IsAdminRole, IsOwnerOrAdminRole
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
-from .permissions import IsOwnerOrAdminRole
 from .filters import ProductFilter
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -19,14 +18,22 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.select_related("category", "owner").all()
     serializer_class = ProductSerializer
-
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter,
+                       filters.SearchFilter]
     filterset_class = ProductFilter
-
     ordering_fields = ["price", "created_at"]
     ordering = ["-created_at"]
+    search_fields = ["title", "description"]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Фермер видит только свои товары в режиме редактирования
+        if self.action in ["update", "partial_update", "destroy"]:
+            if user.is_authenticated and user.role == "farmer":
+                return Product.objects.filter(owner=user)
+        return Product.objects.select_related(
+            "category", "owner").filter(is_active=True)
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:

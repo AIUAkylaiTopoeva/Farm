@@ -71,5 +71,10 @@ class FarmerProfile(models.Model):
         help_text="Грузоподъёмность транспортного средства (кг)"
     )
 
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Верифицирован администратором"
+    ) 
+
     def __str__(self):
         return f"FarmerProfile({self.user.email})"
