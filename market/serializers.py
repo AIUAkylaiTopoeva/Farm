@@ -24,6 +24,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "category_slug",
             "title",
             "description",
+            'image',
             "price",
             "is_active",
             "created_at",

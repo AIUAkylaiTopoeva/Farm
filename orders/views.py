@@ -26,13 +26,13 @@ class OrderListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
         user = self.request.user
         if user.role == "farmer":
-            # Фермер видит заказы на свои товары
             return Order.objects.filter(
                 items__product__owner=user
             ).distinct().prefetch_related("items__product")
-        # Покупатель видит свои заказы
         return Order.objects.filter(
             customer=user
         ).prefetch_related("items__product")
@@ -44,6 +44,9 @@ class OrderDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # ← добавь эту проверку
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
         user = self.request.user
         if user.role == "farmer":
             return Order.objects.filter(
@@ -109,6 +112,9 @@ class ReviewDeleteView(generics.DestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # ← добавь эту проверку
+        if getattr(self, 'swagger_fake_view', False):
+            return Review.objects.none()
         return Review.objects.filter(author=self.request.user)
 
 
