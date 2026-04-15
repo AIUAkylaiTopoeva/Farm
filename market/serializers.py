@@ -12,6 +12,7 @@ class ProductSerializer(serializers.ModelSerializer):
     owner_email = serializers.EmailField(source="owner.email", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     category_slug = serializers.CharField(source="category.slug", read_only=True)
+    image = serializers.ImageField(required=True)
 
     class Meta:
         model = Product

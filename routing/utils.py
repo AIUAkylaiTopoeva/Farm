@@ -100,3 +100,43 @@ def nearest_neighbor(
         current_lon = nearest["lon"]
 
     return route
+
+import urllib.request
+import json
+import math
+
+def get_real_distance(lat1, lon1, lat2, lon2):
+    """
+    Пробует получить реальное расстояние через OSRM.
+    Если недоступен — возвращает Haversine × 1.3
+    """
+    try:
+        url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+        req = urllib.request.Request(url, headers={"User-Agent": "AgroPathKG/1.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+        if data.get("code") == "Ok":
+            route = data["routes"][0]
+            return {
+                "distance_km": round(route["distance"] / 1000, 2),
+                "duration_min": round(route["duration"] / 60, 1),
+                "source": "osrm"
+            }
+    except Exception:
+        pass
+    
+    # Fallback: Haversine
+    dist = haversine_km(lat1, lon1, lat2, lon2) * 1.3
+    return {
+        "distance_km": round(dist, 2),
+        "duration_min": round(dist / 40 * 60, 1),
+        "source": "haversine"
+    }
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    return R * 2 * math.asin(math.sqrt(a))

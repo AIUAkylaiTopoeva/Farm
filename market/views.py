@@ -4,6 +4,7 @@ from accounts.permissions import IsFarmer, IsAdminRole, IsOwnerOrAdminRole
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
 from .filters import ProductFilter
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -19,12 +20,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
+    parser_classes = [MultiPartParser, FormParser] 
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter,
                        filters.SearchFilter]
     filterset_class = ProductFilter
     ordering_fields = ["price", "created_at"]
     ordering = ["-created_at"]
     search_fields = ["title", "description"]
+
 
     def get_queryset(self):
         user = self.request.user
@@ -46,3 +49,4 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+        
