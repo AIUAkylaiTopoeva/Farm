@@ -17,7 +17,7 @@ from accounts.permissions import IsCustomer, IsFarmer
 class OrderCreateView(generics.CreateAPIView):
     """POST /api/orders/ — создать заказ"""
     serializer_class = OrderCreateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsCustomer]
 
 
 class OrderListView(generics.ListAPIView):
