@@ -24,7 +24,6 @@ class OptimizeRouteRequestSerializer(serializers.Serializer):
 
 
 class CompareRouteRequestSerializer(serializers.Serializer):
-    """Для /api/routing/compare/ — добавляет road_quality."""
     product_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         allow_empty=False,
@@ -35,15 +34,20 @@ class CompareRouteRequestSerializer(serializers.Serializer):
         default="medium",
         required=False,
     )
-
-    def validate_product_ids(self, value):
-        seen = set()
-        unique = []
-        for x in value:
-            if x not in seen:
-                unique.append(x)
-                seen.add(x)
-        return unique
+    fuel_price = serializers.FloatField(
+        required=False,
+        default=55.0,
+        min_value=1.0,
+        max_value=500.0,
+        help_text="Цена бензина сом/литр (по умолчанию 55)"
+    )
+    fuel_consumption = serializers.FloatField(
+        required=False,
+        default=8.0,
+        min_value=1.0,
+        max_value=50.0,
+        help_text="Расход л/100км (по умолчанию 8)"
+    )
 
 
 class RoutePointSerializer(serializers.Serializer):

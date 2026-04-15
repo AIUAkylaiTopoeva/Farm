@@ -146,59 +146,30 @@ class OptimizeRouteView(APIView):
 # ── View 2: Многокритериальное сравнение ───────────────────────────────────
 
 class CompareRouteView(APIView):
-    """
-    POST /api/routing/compare/
-
-    Считает маршрут по трём профилям и возвращает:
-      - cheapest  — самый дешёвый маршрут
-      - fastest   — самый быстрый
-      - balanced  — сбалансированный (все критерии равны)
-    А также экономию денег, времени и расстояния.
-
-    Body:
-    {
-      "product_ids": [1, 2, 3],
-      "start": {"lat": 42.87, "lon": 74.59},  // опционально
-      "road_quality": "medium"                 // "good" / "medium" / "bad"
-    }
-
-    Ответ содержит:
-    {
-      "profiles": {
-        "cheapest":  {"distance_km", "fuel_cost_som", "travel_time_min", "score"},
-        "fastest":   {...},
-        "balanced":  {...}
-      },
-      "winner": {
-        "cheapest":   "cheapest",
-        "fastest":    "fastest",
-        "best_score": "balanced"
-      },
-      "savings": {
-        "money_som":   120.5,
-        "time_min":    18.0,
-        "distance_km": 7.4
-      },
-      "points": [...]   // оптимизированный порядок ферм
-    }
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         req_ser = CompareRouteRequestSerializer(data=request.data)
         req_ser.is_valid(raise_exception=True)
 
-        product_ids: List[int] = req_ser.validated_data["product_ids"]
-        start: Optional[Dict] = req_ser.validated_data.get("start")
-        road_quality: str = req_ser.validated_data.get("road_quality", "medium")
+        product_ids = req_ser.validated_data["product_ids"]
+        start = req_ser.validated_data.get("start")
+        road_quality = req_ser.validated_data.get("road_quality", "medium")
+        fuel_price = req_ser.validated_data.get("fuel_price", 55.0)
+        fuel_consumption = req_ser.validated_data.get("fuel_consumption", 8.0)
 
         points, error = _resolve_points(product_ids)
         if error:
             return Response(error, status=status.HTTP_400_BAD_REQUEST)
 
-        comparison = compare_route_profiles(points, start=start, road_quality=road_quality)
+        comparison = compare_route_profiles(
+            points,
+            start=start,
+            road_quality=road_quality,
+            fuel_price=req_ser.validated_data.get("fuel_price", 55.0),
+            fuel_consumption=req_ser.validated_data.get("fuel_consumption", 8.0),
+        )
 
-        # Добавляем сами точки (в оптимизированном порядке)
         from .utils import nearest_neighbor as nn
         comparison["points"] = nn(points, start=start)
 
