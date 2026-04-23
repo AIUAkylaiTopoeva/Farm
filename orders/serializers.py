@@ -39,46 +39,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            "id", "delivery_address",
-            "delivery_lat", "delivery_lon",
-            "comment", "items"
-        )
-
-    def validate_items(self, items):
-        if not items:
-            raise serializers.ValidationError(
-                "Заказ должен содержать хотя бы один товар"
-            )
-        return items
-
-    def create(self, validated_data):
-        items_data = validated_data.pop("items")
-        customer = self.context["request"].user
-
-        order = Order.objects.create(
-            customer=customer,
-            **validated_data
-        )
-
-        for item_data in items_data:
-            product = item_data["product"]
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=item_data["quantity"],
-                price_at_order=product.price,
-            )
-
-        order.calculate_total()
-        return order
-
-
-class OrderCreateSerializer(serializers.ModelSerializer):
-    items = OrderItemCreateSerializer(many=True)
-
-    class Meta:
-        model = Order
-        fields = (
             "id",
             "delivery_name",      # ← Имя получателя
             "delivery_phone",     # ← Телефон
