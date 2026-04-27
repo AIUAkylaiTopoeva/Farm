@@ -4,6 +4,8 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 from accounts.models import FarmerProfile
 from market.models import Category, Product
+import io
+from PIL import Image
 
 User = get_user_model()
 
@@ -39,6 +41,19 @@ def make_product(owner, category, title="Морковь", price=100):
     )
 
 
+def make_image_file(name="test.jpg"):
+    """
+    Создаёт изображение в памяти — без временных файлов.
+    Работает на Windows без PermissionError.
+    """
+    buf = io.BytesIO()
+    img = Image.new('RGB', (100, 100), color=(34, 139, 34))
+    img.save(buf, format='JPEG')
+    buf.seek(0)
+    buf.name = name
+    return buf
+
+
 class CategoryModelTest(TestCase):
 
     def test_slug_auto_generated(self):
@@ -47,7 +62,6 @@ class CategoryModelTest(TestCase):
         self.assertNotIn(" ", cat.slug)
 
     def test_slug_unique_on_duplicate_name(self):
-        # name уникален, поэтому проверяем что slug генерируется без пробелов
         c1 = Category.objects.create(name="Фрукты разные")
         c2 = Category.objects.create(name="Фрукты свежие")
         self.assertNotEqual(c1.slug, c2.slug)
@@ -76,7 +90,7 @@ class CategoryAPITest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
     def test_create_category_as_customer_forbidden(self):
-        customer = make_user(email="cust@test.com")
+        make_user(email="cust@test.com")
         self._auth("cust@test.com")
         res = self.client.post("/api/categories/", {"name": "Зелень"})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
@@ -110,7 +124,8 @@ class ProductAPITest(TestCase):
             "category": self.category.id,
             "title": "Картошка",
             "price": "50.00",
-            "weight_kg": 1.0,
+            "weight_kg": "1.0",
+            "image": make_image_file(),  # ← в памяти, без файла
         }, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["owner_email"], "farm@test.com")
@@ -121,6 +136,7 @@ class ProductAPITest(TestCase):
             "category": self.category.id,
             "title": "Картошка",
             "price": "50.00",
+            "image": make_image_file(),
         }, format="multipart")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -139,12 +155,12 @@ class ProductAPITest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_delete_product_as_other_farmer_forbidden(self):
-        other_farmer = make_farmer(email="other@test.com")
+        make_farmer(email="other@test.com")
         self._auth("other@test.com")
         res = self.client.delete(f"/api/products/{self.product.id}/")
         self.assertIn(res.status_code, [
             status.HTTP_403_FORBIDDEN,
-            status.HTTP_404_NOT_FOUND
+            status.HTTP_404_NOT_FOUND,
         ])
 
     def test_filter_by_category(self):
@@ -158,4 +174,9 @@ class ProductAPITest(TestCase):
     def test_search_by_title(self):
         res = self.client.get("/api/products/?search=Морковь")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(res.data["results"]), 1)
+        # Работает и с пагинацией и без
+        data = res.data
+        if isinstance(data, dict) and "results" in data:
+            self.assertGreaterEqual(len(data["results"]), 1)
+        else:
+            self.assertGreaterEqual(len(data), 1)
