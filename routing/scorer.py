@@ -18,17 +18,17 @@ routing/scorer.py
     "balanced" — всё поровну
 
 Алгоритм: Google OR-Tools (TSP solver)
-Fallback:  Nearest Neighbor если OR-Tools недоступен
+Расстояния: OSRM (реальные дороги) + Haversine fallback
 """
 
 from typing import Dict, List, Optional
-from .utils import route_length_km, nearest_neighbor, haversine_km
+from .utils import route_length_km, nearest_neighbor, haversine_km, get_real_distance
 
 # ── Константы ─────────────────────────────────────────────────────────────
 
-DEFAULT_FUEL_PRICE_SOM    = 55.0
-DEFAULT_FUEL_L_PER_100KM  = 8.0
-AVG_SPEED_KMH             = 40.0
+DEFAULT_FUEL_PRICE_SOM   = 55.0
+DEFAULT_FUEL_L_PER_100KM = 8.0
+AVG_SPEED_KMH            = 40.0
 
 ROAD_QUALITY_FACTORS = {
     "good":   1.0,
@@ -43,7 +43,55 @@ WEIGHT_PROFILES = {
 }
 
 
-# ── OR-Tools оптимизация ──────────────────────────────────────────────────
+# ── OSRM реальное расстояние по маршруту ─────────────────────────────────
+
+def _real_route_length(
+    points: List[Dict],
+    start: Optional[Dict] = None,
+    road_quality: str = "medium",
+) -> Dict:
+    """
+    Считает суммарное расстояние и время по реальным дорогам через OSRM.
+    Если OSRM недоступен — fallback на Haversine × road_factor.
+    Возвращает {"distance_km": float, "duration_min": float, "source": str}
+    """
+    road_factor = ROAD_QUALITY_FACTORS.get(road_quality, 1.2)
+
+    all_points = []
+    if start:
+        all_points.append(start)
+    all_points.extend(points)
+
+    if len(all_points) < 2:
+        return {"distance_km": 0.0, "duration_min": 0.0, "source": "empty"}
+
+    total_distance = 0.0
+    total_duration = 0.0
+    source = "osrm"
+
+    for i in range(len(all_points) - 1):
+        result = get_real_distance(
+            all_points[i]["lat"], all_points[i]["lon"],
+            all_points[i + 1]["lat"], all_points[i + 1]["lon"],
+        )
+        total_distance += result["distance_km"]
+        total_duration += result["duration_min"]
+        if result["source"] == "haversine":
+            source = "haversine"
+
+    # Применяем коэффициент дороги только если OSRM недоступен
+    if source == "haversine":
+        total_distance *= road_factor
+        total_duration *= road_factor
+
+    return {
+        "distance_km":  round(total_distance, 2),
+        "duration_min": round(total_duration, 1),
+        "source":       source,
+    }
+
+
+# ── OR-Tools матрица стоимостей ───────────────────────────────────────────
 
 def _build_distance_matrix(
     points: List[Dict],
@@ -56,8 +104,7 @@ def _build_distance_matrix(
 ) -> List[List[int]]:
     """
     Строит матрицу стоимости перехода между точками.
-    Стоимость = взвешенная комбинация расстояния и топлива.
-    Умножаем на 1000 чтобы перевести в целые числа для OR-Tools.
+    Использует OSRM для реальных расстояний.
     """
     road_factor = ROAD_QUALITY_FACTORS.get(road_quality, 1.2)
     all_points = []
@@ -74,21 +121,32 @@ def _build_distance_matrix(
             if i == j:
                 row.append(0)
             else:
-                dist_km = haversine_km(
+                # Используем OSRM для реального расстояния
+                real = get_real_distance(
                     all_points[i]["lat"], all_points[i]["lon"],
                     all_points[j]["lat"], all_points[j]["lon"],
-                ) * road_factor
+                )
+                dist_km = real["distance_km"]
+                time_min = real["duration_min"]
+
+                # Если OSRM недоступен — применяем road_factor
+                if real["source"] == "haversine":
+                    dist_km  *= road_factor
+                    time_min *= road_factor
 
                 fuel_cost = (dist_km / 100) * fuel_consumption * fuel_price
-                time_min  = (dist_km / AVG_SPEED_KMH) * 60
-
-                # Взвешенная стоимость перехода
-                cost = weight_distance * dist_km + weight_time * time_min + fuel_cost
+                cost = (
+                    weight_distance * dist_km
+                    + weight_time * time_min
+                    + fuel_cost
+                )
                 row.append(int(cost * 1000))
         matrix.append(row)
 
     return matrix
 
+
+# ── OR-Tools TSP solver ───────────────────────────────────────────────────
 
 def _solve_with_ortools(
     points: List[Dict],
@@ -101,14 +159,12 @@ def _solve_with_ortools(
 ) -> List[Dict]:
     """
     Решает задачу TSP через Google OR-Tools.
-    Возвращает оптимальный порядок точек.
     Fallback на Nearest Neighbor если OR-Tools недоступен.
     """
     try:
         from ortools.constraint_solver import routing_enums_pb2
         from ortools.constraint_solver import pywrapcp
     except ImportError:
-        # OR-Tools не установлен — используем Nearest Neighbor
         return nearest_neighbor(points, start=start)
 
     if len(points) <= 1:
@@ -121,15 +177,13 @@ def _solve_with_ortools(
     )
 
     n = len(matrix)
-    depot = 0  # стартовая точка — индекс 0
+    depot = 0
 
     manager = pywrapcp.RoutingIndexManager(n, 1, depot)
     routing = pywrapcp.RoutingModel(manager)
 
     def distance_callback(from_index, to_index):
-        from_node = manager.IndexToNode(from_index)
-        to_node   = manager.IndexToNode(to_index)
-        return matrix[from_node][to_node]
+        return matrix[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]
 
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
@@ -141,21 +195,18 @@ def _solve_with_ortools(
     search_params.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
-    search_params.time_limit.seconds = 2  # максимум 2 секунды
+    search_params.time_limit.seconds = 2
 
     solution = routing.SolveWithParameters(search_params)
 
     if not solution:
-        # OR-Tools не нашёл решение — fallback
         return nearest_neighbor(points, start=start)
 
-    # Извлекаем порядок ферм (пропускаем depot если есть start)
     order = []
     index = routing.Start(0)
     while not routing.IsEnd(index):
         node = manager.IndexToNode(index)
         if start:
-            # node=0 это стартовая точка, пропускаем
             if node > 0:
                 order.append(node - 1)
         else:
@@ -176,19 +227,23 @@ def score_route(
     fuel_consumption: float = DEFAULT_FUEL_L_PER_100KM,
 ) -> Dict:
     """
-    Считает все показатели для одного маршрута и итоговый score F(route).
+    Считает все показатели для одного маршрута.
+    Использует OSRM для реальных расстояний и времени.
     """
     if weights is None:
         weights = WEIGHT_PROFILES["balanced"]
 
     road_factor = ROAD_QUALITY_FACTORS.get(road_quality, 1.2)
 
-    straight_km    = route_length_km(points, start=start)
-    distance_km    = straight_km * road_factor
-    fuel_used_l    = (distance_km / 100) * fuel_consumption
-    fuel_cost_som  = fuel_used_l * fuel_price
-    travel_time_min = (distance_km / AVG_SPEED_KMH) * 60
-    road_penalty   = road_factor
+    # ← ГЛАВНОЕ ИЗМЕНЕНИЕ: реальные дороги через OSRM
+    real = _real_route_length(points, start=start, road_quality=road_quality)
+    distance_km    = real["distance_km"]
+    travel_time_min = real["duration_min"]
+    data_source    = real["source"]
+
+    fuel_used_l   = (distance_km / 100) * fuel_consumption
+    fuel_cost_som = fuel_used_l * fuel_price
+    road_penalty  = road_factor
 
     D_norm = distance_km / 50.0
     C_norm = fuel_cost_som / 200.0
@@ -210,6 +265,7 @@ def score_route(
         "road_quality":    road_quality,
         "road_penalty":    road_penalty,
         "score":           round(score, 4),
+        "data_source":     data_source,  # osrm или haversine
     }
 
 
@@ -223,13 +279,12 @@ def compare_route_profiles(
     fuel_consumption: float = DEFAULT_FUEL_L_PER_100KM,
 ) -> Dict:
     """
-    Для каждого профиля OR-Tools строит свой оптимальный маршрут
-    с разными весами критериев. Три профиля — три разных маршрута!
+    Для каждого профиля OR-Tools строит свой оптимальный маршрут.
+    Расстояния — реальные дороги через OSRM.
     """
-
-    # Наивный порядок — без оптимизации
+    # Наивный порядок
     naive_points = list(points)
-    naive_score  = score_route(
+    naive_score = score_route(
         naive_points,
         start=start,
         road_quality=road_quality,
@@ -238,28 +293,16 @@ def compare_route_profiles(
         fuel_consumption=fuel_consumption,
     )
 
-    # Для каждого профиля OR-Tools строит СВОЙ маршрут
-    # с весами специфичными для этого профиля
     profile_configs = {
-        "cheapest": {
-            "weight_distance": 0.1,
-            "weight_time":     0.2,
-        },
-        "fastest": {
-            "weight_distance": 0.2,
-            "weight_time":     0.6,
-        },
-        "balanced": {
-            "weight_distance": 0.25,
-            "weight_time":     0.25,
-        },
+        "cheapest": {"weight_distance": 0.1, "weight_time": 0.2},
+        "fastest":  {"weight_distance": 0.2, "weight_time": 0.6},
+        "balanced": {"weight_distance": 0.25, "weight_time": 0.25},
     }
 
-    results      = {}
-    best_routes  = {}
+    results     = {}
+    best_routes = {}
 
     for profile_name, config in profile_configs.items():
-        # OR-Tools оптимизирует маршрут под этот профиль
         optimized = _solve_with_ortools(
             points,
             start=start,
@@ -270,7 +313,6 @@ def compare_route_profiles(
             fuel_consumption=fuel_consumption,
         )
         best_routes[profile_name] = optimized
-
         results[profile_name] = score_route(
             optimized,
             start=start,
@@ -280,12 +322,10 @@ def compare_route_profiles(
             fuel_consumption=fuel_consumption,
         )
 
-    # Победители по каждому критерию
     cheapest_profile = min(results, key=lambda k: results[k]["fuel_cost_som"])
     fastest_profile  = min(results, key=lambda k: results[k]["travel_time_min"])
     best_score_key   = min(results, key=lambda k: results[k]["score"])
 
-    # Экономия: наивный vs лучший оптимизированный
     best_cost = results[cheapest_profile]["fuel_cost_som"]
     best_time = results[fastest_profile]["travel_time_min"]
     best_dist = results[best_score_key]["distance_km"]
@@ -304,8 +344,7 @@ def compare_route_profiles(
     return {
         "profiles": results,
         "profile_routes": {
-            name: route
-            for name, route in best_routes.items()
+            name: route for name, route in best_routes.items()
         },
         "naive": {
             "distance_km":     naive_dist,
