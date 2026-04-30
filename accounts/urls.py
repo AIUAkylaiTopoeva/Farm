@@ -10,6 +10,9 @@ from .views import (
     ChangeRoleView,
     VerifyEmailView,
     ResendCodeView,
+    FarmersMapView,
+    AdminUsersView,
+    VerifyEmailLinkView,
 )
 
 urlpatterns = [
@@ -21,4 +24,7 @@ urlpatterns = [
     path("resend-code/", ResendCodeView.as_view(), name="resend-code"),
     path("farmer/profile/", UpdateFarmerProfileView.as_view(), name="farmer-profile"),
     path("change-role/", ChangeRoleView.as_view(), name="change-role"),
+    path("farmers/map/", FarmersMapView.as_view(), name="farmers-map"),
+    path("users/", AdminUsersView.as_view(), name="admin-users"),
+    path("verify-link/", VerifyEmailLinkView.as_view(), name="verify-email-link"),
 ]

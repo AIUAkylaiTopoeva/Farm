@@ -6,7 +6,8 @@ from .serializers import (
     RegisterSerializer, MeSerializer,
     FarmerProfileSerializer, VerifyEmailSerializer
 )
-from .models import FarmerProfile
+from .models import FarmerProfile, User
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from .utils import send_verification_email, send_welcome_email
 
 User = get_user_model()
@@ -164,3 +165,77 @@ class ChangeRoleView(APIView):
             "role": user.role,
             "message": "Role updated successfully"
         })
+
+class FarmersMapView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        profiles = FarmerProfile.objects.filter(
+            lat__isnull=False,
+            lon__isnull=False,
+        ).select_related('user')
+        data = []
+        for p in profiles:
+            data.append({
+                'id': p.id,
+                'farm_name': p.farm_name or p.user.email.split('@')[0],
+                'address': p.address or '',
+                'lat': float(p.lat),
+                'lon': float(p.lon),
+                'email': p.user.email,
+                'products_count': p.user.products.filter(is_active=True).count(),
+            })
+        return Response(data)
+
+
+class AdminUsersView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().order_by('-date_joined')
+        data = []
+        for u in users:
+            d = {
+                'id': u.id,
+                'email': u.email,
+                'role': u.role,
+                'is_active': u.is_active,
+            }
+            # Если есть профиль фермера
+            try:
+                d['farm_name'] = u.farmer_profile.farm_name
+            except Exception:
+                d['farm_name'] = None
+            data.append(d)
+        return Response(data)
+    
+from django.http import HttpResponse
+
+class VerifyEmailLinkView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        email = request.GET.get('email')
+        code = request.GET.get('code')
+
+        try:
+            user = User.objects.get(email=email, activation_code=code)
+        except User.DoesNotExist:
+            return HttpResponse("<html><body style='text-align:center;padding:50px;font-family:Arial'><h2 style='color:red'>❌ Ссылка недействительна</h2><p>Возможно аккаунт уже активирован</p></body></html>")
+
+        if not user.is_verified:
+            user.is_active = True
+            user.is_verified = True
+            user.activation_code = ''
+            user.save(update_fields=['is_active', 'is_verified', 'activation_code'])
+
+        return HttpResponse("""
+            <html><body style="font-family:Arial;text-align:center;padding:50px;background:#f8f9fa">
+            <div style="max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:16px">
+            <div style="font-size:60px">✅</div>
+            <h2 style="color:#1C4A2A">Email подтверждён!</h2>
+            <p style="color:#666">Аккаунт активирован.<br>Войдите в приложение AgroPath KG.</p>
+            <div style="margin-top:20px;padding:12px;background:#E8F5E9;border-radius:8px;color:#1C4A2A;font-weight:bold">
+            🌿 AgroPath KG
+            </div></div></body></html>
+        """)

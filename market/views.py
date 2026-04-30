@@ -5,7 +5,9 @@ from accounts.permissions import IsFarmer, IsAdminRole, IsOwnerOrAdminRole
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
 from .filters import ProductFilter
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 
 class ProductPagination(PageNumberPagination):
@@ -27,7 +29,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     pagination_class = ProductPagination  # ← добавили
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter,
                        filters.SearchFilter]
@@ -52,6 +54,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action in ["update", "partial_update", "destroy"]:
             return [permissions.IsAuthenticated(), IsOwnerOrAdminRole()]
         return [permissions.IsAuthenticated()]
+    
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def my(self, request):
+        products = Product.objects.filter(owner=request.user).order_by('-created_at')
+        page = self.paginate_queryset(products)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
+        print("DATA:", self.request.data)  # ← добавь
+        print("FILES:", self.request.FILES)  # ← добавь
         serializer.save(owner=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print("ERRORS:", serializer.errors)  # ← добавь
+            return Response(serializer.errors, status=400)
+        return super().create(request, *args, **kwargs)

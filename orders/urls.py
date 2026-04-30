@@ -8,6 +8,7 @@ from .views import (
     ReviewDeleteView,
     LikeToggleView,
     ProductLikesView,
+    AdminOrderListView
 )
 
 urlpatterns = [
@@ -15,6 +16,7 @@ urlpatterns = [
     path("orders/", OrderListView.as_view(), name="order-list"),
     path("orders/create/", OrderCreateView.as_view(), name="order-create"),
     path("orders/<int:pk>/", OrderDetailView.as_view(), name="order-detail"),
+    path("orders/admin/", AdminOrderListView.as_view(), name="admin-orders"),
     path("orders/<int:pk>/status/", OrderStatusUpdateView.as_view(), name="order-status"),
 
     # Отзывы

@@ -159,3 +159,15 @@ class ProductLikesView(APIView):
             "likes_count": product.likes.count(),
             "is_liked": is_liked
         })
+    
+class AdminOrderListView(generics.ListAPIView):
+    """GET /api/orders/admin/ — все заказы для админа"""
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'admin' or user.is_staff:
+            return Order.objects.all().prefetch_related(
+                'items__product').order_by('-created_at')
+        return Order.objects.none()
