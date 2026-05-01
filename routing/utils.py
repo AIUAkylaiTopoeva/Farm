@@ -25,7 +25,7 @@ def get_real_distance(lat1, lon1, lat2, lon2):
     try:
         url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
         req = urllib.request.Request(url, headers={"User-Agent": "AgroPathKG/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with urllib.request.urlopen(req, timeout=1) as resp:
             data = json.loads(resp.read())
         if data.get("code") == "Ok":
             route = data["routes"][0]
@@ -42,6 +42,29 @@ def get_real_distance(lat1, lon1, lat2, lon2):
         "duration_min": round(dist / 40 * 60, 1),
         "source": "haversine"
     }
+
+
+def get_route_geometry(lat1, lon1, lat2, lon2):
+    """
+    OSRM → список координат реального маршрута по дорогам.
+    Возвращает список {"lat": ..., "lon": ...} или [] если OSRM недоступен.
+    """
+    try:
+        url = (
+            f"http://router.project-osrm.org/route/v1/driving/"
+            f"{lon1},{lat1};{lon2},{lat2}"
+            f"?overview=full&geometries=geojson"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "AgroPathKG/1.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+        if data.get("code") == "Ok":
+            # OSRM возвращает [lon, lat] — меняем на {"lat": ..., "lon": ...}
+            coords = data["routes"][0]["geometry"]["coordinates"]
+            return [{"lat": c[1], "lon": c[0]} for c in coords]
+    except Exception:
+        pass
+    return []
 
 
 def group_products_by_farmer(raw_points: List[Dict]) -> Dict[int, List[int]]:

@@ -1,9 +1,5 @@
 """
 routing/views.py
-
-POST /api/routing/optimize/   — оптимизация порядка ферм (nearest neighbor)
-POST /api/routing/compare/    — многокритериальное сравнение маршрутов
-                                (cheapest / fastest / balanced)
 """
 
 from typing import Dict, List, Optional
@@ -20,17 +16,14 @@ from .serializers import (
     OptimizeRouteResponseSerializer,
     CompareRouteRequestSerializer,
 )
-from .utils import nearest_neighbor, route_length_km, group_products_by_farmer
+from .utils import (
+    nearest_neighbor, route_length_km,
+    group_products_by_farmer, get_route_geometry,
+)
 from .scorer import compare_route_profiles
 
 
-
 def _resolve_points(product_ids: List[int]) -> tuple:
-    """
-    По списку product_ids возвращает (points, error_response или None).
-    points — список dict с координатами ферм.
-    Исправлен N+1 запрос: используем один словарь вместо цикла с ORM.
-    """
     products = (
         Product.objects
         .select_related("owner")
@@ -45,13 +38,10 @@ def _resolve_points(product_ids: List[int]) -> tuple:
             "missing_product_ids": missing,
         }
 
-    # Группируем товары по фермеру (без N+1)
     raw_points = [{"farmer_id": p.owner_id, "product_id": p.id} for p in products]
     products_by_farmer = group_products_by_farmer(raw_points)
 
-    # Строим словарь owner_id → порядок появления (по product_ids)
     order_map: Dict[int, int] = {}
-    # Один запрос вместо цикла
     pid_to_owner = {p.id: p.owner_id for p in products}
     for pid in product_ids:
         owner_id = pid_to_owner.get(pid)
@@ -65,7 +55,6 @@ def _resolve_points(product_ids: List[int]) -> tuple:
     points: List[Dict] = []
     missing_coords = []
 
-    # Сортируем по порядку появления в запросе
     for farmer_id in sorted(products_by_farmer.keys(), key=lambda fid: order_map.get(fid, 999)):
         pids = products_by_farmer[farmer_id]
         fp = profiles_map.get(farmer_id)
@@ -96,21 +85,7 @@ def _resolve_points(product_ids: List[int]) -> tuple:
     return points, None
 
 
-# ── View 1: Оптимизация порядка ────────────────────────────────────────────
-
 class OptimizeRouteView(APIView):
-    """
-    POST /api/routing/optimize/
-
-    Принимает список product_ids, возвращает оптимальный порядок объезда ферм
-    (алгоритм nearest neighbor) и сравнение с наивным порядком.
-
-    Body:
-    {
-      "product_ids": [1, 2, 3],
-      "start": {"lat": 42.87, "lon": 74.59}   // опционально
-    }
-    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -143,8 +118,6 @@ class OptimizeRouteView(APIView):
         return Response(resp_ser.data, status=status.HTTP_200_OK)
 
 
-# ── View 2: Многокритериальное сравнение ───────────────────────────────────
-
 class CompareRouteView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -166,11 +139,35 @@ class CompareRouteView(APIView):
             points,
             start=start,
             road_quality=road_quality,
-            fuel_price=req_ser.validated_data.get("fuel_price", 55.0),
-            fuel_consumption=req_ser.validated_data.get("fuel_consumption", 8.0),
+            fuel_price=fuel_price,
+            fuel_consumption=fuel_consumption,
         )
 
-        from .utils import nearest_neighbor as nn
-        comparison["points"] = nn(points, start=start)
+        comparison["points"] = nearest_neighbor(points, start=start)
+
+        # ── Геометрия реального маршрута по дорогам ──────────────────────
+        # Берём balanced маршрут и строим геометрию через OSRM
+        best_route = comparison.get("profile_routes", {}).get("balanced", [])
+        geometry = []
+
+        all_points = []
+        if start:
+            all_points.append({"lat": start["lat"], "lon": start["lon"]})
+        all_points.extend(best_route)
+
+        for i in range(len(all_points) - 1):
+            segment = get_route_geometry(
+                all_points[i]["lat"], all_points[i]["lon"],
+                all_points[i + 1]["lat"], all_points[i + 1]["lon"],
+            )
+            if segment:
+                # Избегаем дублирования точек на стыках сегментов
+                if geometry and segment:
+                    geometry.extend(segment[1:])
+                else:
+                    geometry.extend(segment)
+
+        comparison["route_geometry"] = geometry
+        # ─────────────────────────────────────────────────────────────────
 
         return Response(comparison, status=status.HTTP_200_OK)
