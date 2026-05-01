@@ -14,3 +14,4 @@ requests==2.32.5
 python-slugify==8.0.4
 dj-rest-auth==7.1.1
 django-allauth==65.14.3
+dj-database-url==3.1.2
