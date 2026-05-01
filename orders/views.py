@@ -186,7 +186,7 @@ class ReviewUpdateView(generics.UpdateAPIView):
 class LikedProductsView(generics.ListAPIView):
     """GET /api/products/liked/ — лайкнутые товары пользователя"""
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         liked_ids = Like.objects.filter(

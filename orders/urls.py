@@ -24,5 +24,5 @@ urlpatterns = [
     path("reviews/<int:pk>/edit/", ReviewUpdateView.as_view(), name="review-update"),  # ← новый
     path("products/<int:product_id>/like/", LikeToggleView.as_view(), name="like-toggle"),
     path("products/<int:product_id>/likes/", ProductLikesView.as_view(), name="likes-count"),
-    path("products/liked/", LikedProductsView.as_view(), name="liked-products"),  # ← новый
+    path("liked-products/", LikedProductsView.as_view(), name="liked-products"),
 ]
