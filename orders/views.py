@@ -14,12 +14,10 @@ from market.models import Product
 from market.serializers import ProductSerializer
 from accounts.permissions import IsCustomer, IsFarmer
 
-
 class OrderCreateView(generics.CreateAPIView):
     """POST /api/orders/ — создать заказ"""
     serializer_class = OrderCreateSerializer
     permission_classes = [permissions.IsAuthenticated, IsCustomer]
-
 
 class OrderListView(generics.ListAPIView):
     """GET /api/orders/ — мои заказы"""
@@ -29,6 +27,7 @@ class OrderListView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
+        
         user = self.request.user
         if user.role == "farmer":
             return Order.objects.filter(
@@ -38,23 +37,21 @@ class OrderListView(generics.ListAPIView):
             customer=user
         ).prefetch_related("items__product")
 
-
 class OrderDetailView(generics.RetrieveAPIView):
     """GET /api/orders/<id>/"""
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # ← добавь эту проверку
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
+            
         user = self.request.user
         if user.role == "farmer":
             return Order.objects.filter(
                 items__product__owner=user
             ).distinct()
         return Order.objects.filter(customer=user)
-
 
 class OrderStatusUpdateView(APIView):
     """PATCH /api/orders/<id>/status/ — фермер меняет статус"""
@@ -77,12 +74,7 @@ class OrderStatusUpdateView(APIView):
         order.save(update_fields=["status"])
         return Response(OrderSerializer(order).data)
 
-
 class ReviewListCreateView(generics.ListCreateAPIView):
-    """
-    GET  /api/products/<id>/reviews/ — список отзывов
-    POST /api/products/<id>/reviews/ — добавить отзыв
-    """
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -92,38 +84,22 @@ class ReviewListCreateView(generics.ListCreateAPIView):
         ).select_related("author")
 
     def perform_create(self, serializer):
-        product = get_object_or_404(
-            Product, pk=self.kwargs["product_id"]
-        )
-        # Нельзя оставить отзыв на свой товар
+        product = get_object_or_404(Product, pk=self.kwargs["product_id"])
         if product.owner == self.request.user:
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied(
-                "Нельзя оставить отзыв на свой товар"
-            )
-        serializer.save(
-            author=self.request.user,
-            product=product
-        )
-
+            raise PermissionDenied("Нельзя оставить отзыв на свой товар")
+        serializer.save(author=self.request.user, product=product)
 
 class ReviewDeleteView(generics.DestroyAPIView):
-    """DELETE /api/reviews/<id>/"""
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # ← добавь эту проверку
         if getattr(self, 'swagger_fake_view', False):
             return Review.objects.none()
         return Review.objects.filter(author=self.request.user)
 
-
 class LikeToggleView(APIView):
-    """
-    POST /api/products/<id>/like/ — лайк/анлайк (toggle)
-    Если лайк есть — удаляет, если нет — добавляет
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, product_id):
@@ -134,18 +110,10 @@ class LikeToggleView(APIView):
         )
         if not created:
             like.delete()
-            return Response({
-                "liked": False,
-                "likes_count": product.likes.count()
-            })
-        return Response({
-            "liked": True,
-            "likes_count": product.likes.count()
-        })
-
+            return Response({"liked": False, "likes_count": product.likes.count()})
+        return Response({"liked": True, "likes_count": product.likes.count()})
 
 class ProductLikesView(APIView):
-    """GET /api/products/<id>/likes/ — количество лайков"""
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, product_id):
@@ -160,35 +128,39 @@ class ProductLikesView(APIView):
             "likes_count": product.likes.count(),
             "is_liked": is_liked
         })
-    
+
 class AdminOrderListView(generics.ListAPIView):
-    """GET /api/orders/admin/ — все заказы для админа"""
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
+
         user = self.request.user
         if user.role == 'admin' or user.is_staff:
             return Order.objects.all().prefetch_related(
                 'items__product').order_by('-created_at')
         return Order.objects.none()
-    
+
 class ReviewUpdateView(generics.UpdateAPIView):
-    """PATCH /api/reviews/<id>/"""
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ['patch']
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Review.objects.none()
         return Review.objects.filter(author=self.request.user)
 
-
 class LikedProductsView(generics.ListAPIView):
-    """GET /api/products/liked/ — лайкнутые товары пользователя"""
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Product.objects.none()
+
         liked_ids = Like.objects.filter(
             user=self.request.user
         ).values_list('product_id', flat=True)
