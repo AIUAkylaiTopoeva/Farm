@@ -79,6 +79,10 @@ class ReviewListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        # ЗДЕСЬ НУЖНО ДОБАВИТЬ:
+        if getattr(self, 'swagger_fake_view', False):
+            return Review.objects.none()
+            
         return Review.objects.filter(
             product_id=self.kwargs["product_id"]
         ).select_related("author")
