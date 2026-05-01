@@ -123,19 +123,23 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    author_email = serializers.EmailField(
-        source="author.email", read_only=True
-    )
+    user_email = serializers.EmailField(source="author.email", read_only=True)
+    user_first_name = serializers.CharField(source="author.first_name", read_only=True)
+    is_own = serializers.SerializerMethodField()
 
     class Meta:
         model = Review
         fields = (
-            "id", "product", "author_email",
-            "rating", "text", "created_at"
+            "id", "product", "user_email", "user_first_name",
+            "is_own", "rating", "text", "created_at"
         )
-        read_only_fields = (
-            "id", "author_email", "created_at", "product"
-        )
+        read_only_fields = ("id", "user_email", "user_first_name", "is_own", "created_at", "product")
+
+    def get_is_own(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.author == request.user
+        return False
 
 
 class LikeSerializer(serializers.ModelSerializer):

@@ -11,6 +11,7 @@ from .serializers import (
     LikeSerializer,
 )
 from market.models import Product
+from market.serializers import ProductSerializer
 from accounts.permissions import IsCustomer, IsFarmer
 
 
@@ -171,3 +172,24 @@ class AdminOrderListView(generics.ListAPIView):
             return Order.objects.all().prefetch_related(
                 'items__product').order_by('-created_at')
         return Order.objects.none()
+    
+class ReviewUpdateView(generics.UpdateAPIView):
+    """PATCH /api/reviews/<id>/"""
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['patch']
+
+    def get_queryset(self):
+        return Review.objects.filter(author=self.request.user)
+
+
+class LikedProductsView(generics.ListAPIView):
+    """GET /api/products/liked/ — лайкнутые товары пользователя"""
+    serializer_class = ProductSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        liked_ids = Like.objects.filter(
+            user=self.request.user
+        ).values_list('product_id', flat=True)
+        return Product.objects.filter(id__in=liked_ids, is_active=True)
