@@ -16,7 +16,12 @@ ALLOWED_HOSTS = [
     "localhost",
     ".railway.app",       # Railway домен
     ".up.railway.app",    # Railway домен
-    config('ALLOWED_HOST', default=''),  # твой кастомный домен если будет
+    config('ALLOWED_HOST', default='farm-production-8c2c.up.railway.app'),  # твой кастомный домен если будет
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://farm-production-8c2c.up.railway.app",
+    "https://*.railway.app"
 ]
 
 INSTALLED_APPS = [
@@ -120,7 +125,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS — разрешаем Flutter Web и Railway
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:8000",
