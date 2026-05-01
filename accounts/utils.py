@@ -3,7 +3,7 @@ from django.conf import settings
 
 
 def send_verification_email(user):
-    verify_url = f"http://127.0.0.1:8000/api/accounts/verify-link/?email={user.email}&code={user.activation_code}"
+    verify_url = f"https://clinquant-sundae-1a9ea8.netlify.app/api/accounts/verify-link/?email={user.email}&code={user.activation_code}"
     
     html_message = f"""
     <html><body style="font-family:Arial,sans-serif;background:#f8f9fa;padding:40px 20px">
