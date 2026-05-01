@@ -39,10 +39,16 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = ["title", "description"]
 
     def get_queryset(self):
+        # Добавляем защиту для Swagger
+        if getattr(self, 'swagger_fake_view', False):
+            return Product.objects.none()
+
         user = self.request.user
+        # Проверяем, авторизован ли юзер, прежде чем смотреть его role
         if self.action in ["update", "partial_update", "destroy"]:
-            if user.is_authenticated and user.role == "farmer":
+            if user.is_authenticated and hasattr(user, 'role') and user.role == "farmer":
                 return Product.objects.filter(owner=user)
+        
         return Product.objects.select_related(
             "category", "owner").filter(is_active=True)
 
