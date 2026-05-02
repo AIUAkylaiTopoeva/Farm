@@ -8,7 +8,7 @@ def build_verify_url(user):
     base_url = getattr(
         settings,
         "EMAIL_VERIFICATION_BASE_URL",
-        "http://127.0.0.1:8000/api/accounts/verify-link/",
+        "https://farm-production-8c2c.up.railway.app/api/accounts/verify-link/",
     ).rstrip("/") + "/"
     query = urlencode({"email": user.email, "code": user.activation_code})
     return f"{base_url}?{query}"
