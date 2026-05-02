@@ -153,6 +153,7 @@ from datetime import timedelta
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=120),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.jwt_serializers.AgroTokenObtainPairSerializer",
 }
 
 AUTHENTICATION_BACKENDS = [
@@ -178,5 +179,10 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER', default='')
+
+EMAIL_VERIFICATION_BASE_URL = config(
+    'EMAIL_VERIFICATION_BASE_URL',
+    default='http://127.0.0.1:8000/api/accounts/verify-link/',
+)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
