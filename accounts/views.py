@@ -37,7 +37,7 @@ class VerifyEmailView(APIView):
         serializer = VerifyEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data["email"]
+        email = serializer.validated_data["email"].lower()
         code = serializer.validated_data["code"]
 
         try:
@@ -77,7 +77,7 @@ class ResendCodeView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
+        email = (request.data.get("email") or "").strip().lower()
         if not email:
             return Response(
                 {"error": "Email обязателен"},

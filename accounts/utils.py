@@ -1,10 +1,22 @@
+from urllib.parse import urlencode
+
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
 
 
+def build_verify_url(user):
+    base_url = getattr(
+        settings,
+        "EMAIL_VERIFICATION_BASE_URL",
+        "http://127.0.0.1:8000/api/accounts/verify-link/",
+    ).rstrip("/") + "/"
+    query = urlencode({"email": user.email, "code": user.activation_code})
+    return f"{base_url}?{query}"
+
+
 def send_verification_email(user):
-    verify_url = f"https://farm-production-8c2c.up.railway.app/api/accounts/verify-link/?email={user.email}&code={user.activation_code}"
-    
+    verify_url = build_verify_url(user)
+
     html_message = f"""
     <html><body style="font-family:Arial,sans-serif;background:#f8f9fa;padding:40px 20px">
       <div style="max-width:480px;margin:0 auto;background:white;border-radius:16px;overflow:hidden">
