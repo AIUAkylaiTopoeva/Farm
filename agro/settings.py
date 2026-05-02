@@ -130,7 +130,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:8000",
     "http://localhost:63342",
-    # После деплоя Flutter добавь сюда URL Netlify
+    'https://clinquant-sundae-1a9ea8.netlify.app',
+    "https://farm-production-8c2c.up.railway.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
