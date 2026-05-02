@@ -182,7 +182,7 @@ DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER', default='')
 
 EMAIL_VERIFICATION_BASE_URL = config(
     'EMAIL_VERIFICATION_BASE_URL',
-    default='http://127.0.0.1:8000/api/accounts/verify-link/',
+    default='https://farm-production-8c2c.up.railway.app/api/accounts/verify-link/'
 )
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
