@@ -41,7 +41,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data["email"],
             password=validated_data["password"],
             role=role,
-            is_active=False,
+            is_active=True,
         )
 
         if user.role == User.Role.FARMER:
