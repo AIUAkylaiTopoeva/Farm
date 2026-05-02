@@ -2,8 +2,17 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import FarmerProfile
 from .utils import send_verification_email
+import threading
 
 User = get_user_model()
+
+def _send_async(user):
+    def run():
+        try:
+            send_verification_email(user)
+        except Exception as e:
+            print(f"Email send error: {e}")
+    threading.Thread(target=run, daemon=True).start()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -32,20 +41,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data["email"],
             password=validated_data["password"],
             role=role,
-            is_active=False,  # ← не активен до подтверждения
+            is_active=False,
         )
 
         if user.role == User.Role.FARMER:
             FarmerProfile.objects.create(user=user)
 
-        # Отправляем письмо с кодом
-        try:
-            send_verification_email(user)
-        except Exception as e:
-            print(f"Email send error: {e}")
+        # Отправляем письмо асинхронно — не блокирует ответ
+        _send_async(user)
 
         return user
-
 
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
