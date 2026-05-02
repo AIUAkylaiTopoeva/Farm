@@ -1,8 +1,9 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from accounts.models import FarmerProfile
+from accounts.utils import build_verify_url
 
 User = get_user_model()
 
@@ -234,3 +235,19 @@ class ChangeRoleAPITest(TestCase):
         self._auth()
         res = self.client.patch("/api/accounts/change-role/", {"role": "superadmin"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+class VerificationLinkTest(TestCase):
+
+    @override_settings(EMAIL_VERIFICATION_BASE_URL="https://api.example.com/api/accounts/verify-link/")
+    def test_build_verify_url_uses_setting(self):
+        user = User.objects.create_user(email="link@test.com", password="pass1234")
+        url = build_verify_url(user)
+        self.assertIn("https://api.example.com/api/accounts/verify-link/?", url)
+        self.assertIn("email=link%40test.com", url)
+        self.assertIn(f"code={user.activation_code}", url)
+
+    @override_settings(EMAIL_VERIFICATION_BASE_URL="https://api.example.com/api/accounts/verify-link")
+    def test_build_verify_url_adds_trailing_slash(self):
+        user = User.objects.create_user(email="slash@test.com", password="pass1234")
+        url = build_verify_url(user)
+        self.assertTrue(url.startswith("https://api.example.com/api/accounts/verify-link/?"))
