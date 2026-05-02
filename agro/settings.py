@@ -186,3 +186,4 @@ EMAIL_VERIFICATION_BASE_URL = config(
 )
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
